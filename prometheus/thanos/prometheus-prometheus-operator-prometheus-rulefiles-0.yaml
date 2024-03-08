@@ -1,0 +1,638 @@
+apiVersion: v1
+data:
+  monitor-prometheus-operator-k8s.rules.yaml: |
+    groups:
+    - name: k8s.rules
+      rules:
+      - expr: sum(rate(container_cpu_usage_seconds_total{job="kubelet", metrics_path="/metrics/cadvisor",
+          image!="", container!="POD"}[5m])) by (namespace)
+        record: namespace:container_cpu_usage_seconds_total:sum_rate
+      - expr: |-
+          sum by (cluster, namespace, pod, container) (
+            rate(container_cpu_usage_seconds_total{job="kubelet", metrics_path="/metrics/cadvisor", image!="", container!="POD"}[5m])
+          ) * on (cluster, namespace, pod) group_left(node) topk by (cluster, namespace, pod) (
+            1, max by(cluster, namespace, pod, node) (kube_pod_info{node!=""})
+          )
+        record: node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate
+      - expr: |-
+          container_memory_working_set_bytes{job="kubelet", metrics_path="/metrics/cadvisor", image!=""}
+          * on (namespace, pod) group_left(node) topk by(namespace, pod) (1,
+            max by(namespace, pod, node) (kube_pod_info{node!=""})
+          )
+        record: node_namespace_pod_container:container_memory_working_set_bytes
+      - expr: |-
+          container_memory_rss{job="kubelet", metrics_path="/metrics/cadvisor", image!=""}
+          * on (namespace, pod) group_left(node) topk by(namespace, pod) (1,
+            max by(namespace, pod, node) (kube_pod_info{node!=""})
+          )
+        record: node_namespace_pod_container:container_memory_rss
+      - expr: |-
+          container_memory_cache{job="kubelet", metrics_path="/metrics/cadvisor", image!=""}
+          * on (namespace, pod) group_left(node) topk by(namespace, pod) (1,
+            max by(namespace, pod, node) (kube_pod_info{node!=""})
+          )
+        record: node_namespace_pod_container:container_memory_cache
+      - expr: |-
+          container_memory_swap{job="kubelet", metrics_path="/metrics/cadvisor", image!=""}
+          * on (namespace, pod) group_left(node) topk by(namespace, pod) (1,
+            max by(namespace, pod, node) (kube_pod_info{node!=""})
+          )
+        record: node_namespace_pod_container:container_memory_swap
+      - expr: sum(container_memory_usage_bytes{job="kubelet", metrics_path="/metrics/cadvisor",
+          image!="", container!="POD"}) by (namespace)
+        record: namespace:container_memory_usage_bytes:sum
+      - expr: |-
+          sum by (namespace) (
+              sum by (namespace, pod) (
+                  max by (namespace, pod, container) (
+                      kube_pod_container_resource_requests_memory_bytes{job="kube-state-metrics"}
+                  ) * on(namespace, pod) group_left() max by (namespace, pod) (
+                      kube_pod_status_phase{phase=~"Pending|Running"} == 1
+                  )
+              )
+          )
+        record: namespace:kube_pod_container_resource_requests_memory_bytes:sum
+      - expr: |-
+          sum by (namespace) (
+              sum by (namespace, pod) (
+                  max by (namespace, pod, container) (
+                      kube_pod_container_resource_requests_cpu_cores{job="kube-state-metrics"}
+                  ) * on(namespace, pod) group_left() max by (namespace, pod) (
+                    kube_pod_status_phase{phase=~"Pending|Running"} == 1
+                  )
+              )
+          )
+        record: namespace:kube_pod_container_resource_requests_cpu_cores:sum
+      - expr: |-
+          max by (cluster, namespace, workload, pod) (
+            label_replace(
+              label_replace(
+                kube_pod_owner{job="kube-state-metrics", owner_kind="ReplicaSet"},
+                "replicaset", "$1", "owner_name", "(.*)"
+              ) * on(replicaset, namespace) group_left(owner_name) topk by(replicaset, namespace) (
+                1, max by (replicaset, namespace, owner_name) (
+                  kube_replicaset_owner{job="kube-state-metrics"}
+                )
+              ),
+              "workload", "$1", "owner_name", "(.*)"
+            )
+          )
+        labels:
+          workload_type: deployment
+        record: namespace_workload_pod:kube_pod_owner:relabel
+      - expr: |-
+          max by (cluster, namespace, workload, pod) (
+            label_replace(
+              kube_pod_owner{job="kube-state-metrics", owner_kind="DaemonSet"},
+              "workload", "$1", "owner_name", "(.*)"
+            )
+          )
+        labels:
+          workload_type: daemonset
+        record: namespace_workload_pod:kube_pod_owner:relabel
+      - expr: |-
+          max by (cluster, namespace, workload, pod) (
+            label_replace(
+              kube_pod_owner{job="kube-state-metrics", owner_kind="StatefulSet"},
+              "workload", "$1", "owner_name", "(.*)"
+            )
+          )
+        labels:
+          workload_type: statefulset
+        record: namespace_workload_pod:kube_pod_owner:relabel
+  monitor-prometheus-operator-kube-prometheus-general.rules.yaml: |
+    groups:
+    - name: kube-prometheus-general.rules
+      rules:
+      - expr: count without(instance, pod, node) (up == 1)
+        record: count:up1
+      - expr: count without(instance, pod, node) (up == 0)
+        record: count:up0
+  monitor-prometheus-operator-kube-prometheus-node-recording.rules.yaml: |
+    groups:
+    - name: kube-prometheus-node-recording.rules
+      rules:
+      - expr: sum(rate(node_cpu_seconds_total{mode!="idle",mode!="iowait"}[3m])) BY (instance)
+        record: instance:node_cpu:rate:sum
+      - expr: sum(rate(node_network_receive_bytes_total[3m])) BY (instance)
+        record: instance:node_network_receive_bytes:rate:sum
+      - expr: sum(rate(node_network_transmit_bytes_total[3m])) BY (instance)
+        record: instance:node_network_transmit_bytes:rate:sum
+      - expr: sum(rate(node_cpu_seconds_total{mode!="idle",mode!="iowait"}[5m])) WITHOUT
+          (cpu, mode) / ON(instance) GROUP_LEFT() count(sum(node_cpu_seconds_total) BY
+          (instance, cpu)) BY (instance)
+        record: instance:node_cpu:ratio
+      - expr: sum(rate(node_cpu_seconds_total{mode!="idle",mode!="iowait"}[5m]))
+        record: cluster:node_cpu:sum_rate5m
+      - expr: cluster:node_cpu_seconds_total:rate5m / count(sum(node_cpu_seconds_total)
+          BY (instance, cpu))
+        record: cluster:node_cpu:ratio
+  monitor-prometheus-operator-kubelet.rules.yaml: |
+    groups:
+    - name: kubelet.rules
+      rules:
+      - expr: histogram_quantile(0.99, sum(rate(kubelet_pleg_relist_duration_seconds_bucket[5m]))
+          by (instance, le) * on(instance) group_left(node) kubelet_node_name{job="kubelet",
+          metrics_path="/metrics"})
+        labels:
+          quantile: "0.99"
+        record: node_quantile:kubelet_pleg_relist_duration_seconds:histogram_quantile
+      - expr: histogram_quantile(0.9, sum(rate(kubelet_pleg_relist_duration_seconds_bucket[5m]))
+          by (instance, le) * on(instance) group_left(node) kubelet_node_name{job="kubelet",
+          metrics_path="/metrics"})
+        labels:
+          quantile: "0.9"
+        record: node_quantile:kubelet_pleg_relist_duration_seconds:histogram_quantile
+      - expr: histogram_quantile(0.5, sum(rate(kubelet_pleg_relist_duration_seconds_bucket[5m]))
+          by (instance, le) * on(instance) group_left(node) kubelet_node_name{job="kubelet",
+          metrics_path="/metrics"})
+        labels:
+          quantile: "0.5"
+        record: node_quantile:kubelet_pleg_relist_duration_seconds:histogram_quantile
+  monitor-prometheus-operator-kubernetes-storage.yaml: |
+    groups:
+    - name: kubernetes-storage
+      rules:
+      - alert: KubePersistentVolumeFillingUp
+        annotations:
+          message: The PersistentVolume claimed by {{ $labels.persistentvolumeclaim }}
+            in Namespace {{ $labels.namespace }} is only {{ $value | humanizePercentage
+            }} free.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubepersistentvolumefillingup
+        expr: |-
+          kubelet_volume_stats_available_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics"}
+            /
+          kubelet_volume_stats_capacity_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics"}
+            < 0.03
+        for: 1m
+        labels:
+          severity: critical
+      - alert: KubePersistentVolumeFillingUp
+        annotations:
+          message: Based on recent sampling, the PersistentVolume claimed by {{ $labels.persistentvolumeclaim
+            }} in Namespace {{ $labels.namespace }} is expected to fill up within four
+            days. Currently {{ $value | humanizePercentage }} is available.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubepersistentvolumefillingup
+        expr: |-
+          (
+            kubelet_volume_stats_available_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics"}
+              /
+            kubelet_volume_stats_capacity_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics"}
+          ) < 0.15
+          and
+          predict_linear(kubelet_volume_stats_available_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics"}[6h], 4 * 24 * 3600) < 0
+        for: 1h
+        labels:
+          severity: warning
+      - alert: KubePersistentVolumeErrors
+        annotations:
+          message: The persistent volume {{ $labels.persistentvolume }} has status {{
+            $labels.phase }}.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubepersistentvolumeerrors
+        expr: kube_persistentvolume_status_phase{phase=~"Failed|Pending",job="kube-state-metrics"}
+          > 0
+        for: 5m
+        labels:
+          severity: critical
+  monitor-prometheus-operator-kubernetes-system-kubelet.yaml: |
+    groups:
+    - name: kubernetes-system-kubelet
+      rules:
+      - alert: KubeNodeNotReady
+        annotations:
+          message: '{{ $labels.node }} has been unready for more than 15 minutes.'
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubenodenotready
+        expr: kube_node_status_condition{job="kube-state-metrics",condition="Ready",status="true"}
+          == 0
+        for: 15m
+        labels:
+          severity: warning
+      - alert: KubeNodeUnreachable
+        annotations:
+          message: '{{ $labels.node }} is unreachable and some workloads may be rescheduled.'
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubenodeunreachable
+        expr: (kube_node_spec_taint{job="kube-state-metrics",key="node.kubernetes.io/unreachable",effect="NoSchedule"}
+          unless ignoring(key,value) kube_node_spec_taint{job="kube-state-metrics",key=~"ToBeDeletedByClusterAutoscaler|cloud.google.com/impending-node-termination|aws-node-termination-handler/spot-itn"})
+          == 1
+        labels:
+          severity: warning
+      - alert: KubeletTooManyPods
+        annotations:
+          message: Kubelet '{{ $labels.node }}' is running at {{ $value | humanizePercentage
+            }} of its Pod capacity.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubelettoomanypods
+        expr: |-
+          count by(node) (
+            (kube_pod_status_phase{job="kube-state-metrics",phase="Running"} == 1) * on(instance,pod,namespace,cluster) group_left(node) topk by(instance,pod,namespace,cluster) (1, kube_pod_info{job="kube-state-metrics"})
+          )
+          /
+          max by(node) (
+            kube_node_status_capacity_pods{job="kube-state-metrics"} != 1
+          ) > 0.95
+        for: 15m
+        labels:
+          severity: warning
+      - alert: KubeNodeReadinessFlapping
+        annotations:
+          message: The readiness status of node {{ $labels.node }} has changed {{ $value
+            }} times in the last 15 minutes.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubenodereadinessflapping
+        expr: sum(changes(kube_node_status_condition{status="true",condition="Ready"}[15m]))
+          by (node) > 2
+        for: 15m
+        labels:
+          severity: warning
+      - alert: KubeletPlegDurationHigh
+        annotations:
+          message: The Kubelet Pod Lifecycle Event Generator has a 99th percentile duration
+            of {{ $value }} seconds on node {{ $labels.node }}.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubeletplegdurationhigh
+        expr: node_quantile:kubelet_pleg_relist_duration_seconds:histogram_quantile{quantile="0.99"}
+          >= 10
+        for: 5m
+        labels:
+          severity: warning
+      - alert: KubeletPodStartUpLatencyHigh
+        annotations:
+          message: Kubelet Pod startup 99th percentile latency is {{ $value }} seconds
+            on node {{ $labels.node }}.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubeletpodstartuplatencyhigh
+        expr: histogram_quantile(0.99, sum(rate(kubelet_pod_worker_duration_seconds_bucket{job="kubelet",
+          metrics_path="/metrics"}[5m])) by (instance, le)) * on(instance) group_left(node)
+          kubelet_node_name{job="kubelet", metrics_path="/metrics"} > 60
+        for: 15m
+        labels:
+          severity: warning
+      - alert: KubeletDown
+        annotations:
+          message: Kubelet has disappeared from Prometheus target discovery.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-kubeletdown
+        expr: absent(up{job="kubelet", metrics_path="/metrics"} == 1)
+        for: 15m
+        labels:
+          severity: critical
+  monitor-prometheus-operator-node-exporter.rules.yaml: |
+    groups:
+    - name: node-exporter.rules
+      rules:
+      - expr: |-
+          count without (cpu) (
+            count without (mode) (
+              node_cpu_seconds_total{job="node-exporter"}
+            )
+          )
+        record: instance:node_num_cpu:sum
+      - expr: |-
+          1 - avg without (cpu, mode) (
+            rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[1m])
+          )
+        record: instance:node_cpu_utilisation:rate1m
+      - expr: |-
+          (
+            node_load1{job="node-exporter"}
+          /
+            instance:node_num_cpu:sum{job="node-exporter"}
+          )
+        record: instance:node_load1_per_cpu:ratio
+      - expr: |-
+          1 - (
+            node_memory_MemAvailable_bytes{job="node-exporter"}
+          /
+            node_memory_MemTotal_bytes{job="node-exporter"}
+          )
+        record: instance:node_memory_utilisation:ratio
+      - expr: rate(node_vmstat_pgmajfault{job="node-exporter"}[1m])
+        record: instance:node_vmstat_pgmajfault:rate1m
+      - expr: rate(node_disk_io_time_seconds_total{job="node-exporter", device=~"nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|dasd.+"}[1m])
+        record: instance_device:node_disk_io_time_seconds:rate1m
+      - expr: rate(node_disk_io_time_weighted_seconds_total{job="node-exporter", device=~"nvme.+|rbd.+|sd.+|vd.+|xvd.+|dm-.+|dasd.+"}[1m])
+        record: instance_device:node_disk_io_time_weighted_seconds:rate1m
+      - expr: |-
+          sum without (device) (
+            rate(node_network_receive_bytes_total{job="node-exporter", device!="lo"}[1m])
+          )
+        record: instance:node_network_receive_bytes_excluding_lo:rate1m
+      - expr: |-
+          sum without (device) (
+            rate(node_network_transmit_bytes_total{job="node-exporter", device!="lo"}[1m])
+          )
+        record: instance:node_network_transmit_bytes_excluding_lo:rate1m
+      - expr: |-
+          sum without (device) (
+            rate(node_network_receive_drop_total{job="node-exporter", device!="lo"}[1m])
+          )
+        record: instance:node_network_receive_drop_excluding_lo:rate1m
+      - expr: |-
+          sum without (device) (
+            rate(node_network_transmit_drop_total{job="node-exporter", device!="lo"}[1m])
+          )
+        record: instance:node_network_transmit_drop_excluding_lo:rate1m
+  monitor-prometheus-operator-node-exporter.yaml: |
+    groups:
+    - name: node-exporter
+      rules:
+      - alert: NodeFilesystemSpaceFillingUp
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available space left and is filling up.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemspacefillingup
+          summary: Filesystem is predicted to run out of space within the next 24 hours.
+        expr: |-
+          (
+            node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 40
+          and
+            predict_linear(node_filesystem_avail_bytes{job="node-exporter",fstype!=""}[6h], 24*60*60) < 0
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: warning
+      - alert: NodeFilesystemSpaceFillingUp
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available space left and is filling up fast.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemspacefillingup
+          summary: Filesystem is predicted to run out of space within the next 4 hours.
+        expr: |-
+          (
+            node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 15
+          and
+            predict_linear(node_filesystem_avail_bytes{job="node-exporter",fstype!=""}[6h], 4*60*60) < 0
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: critical
+      - alert: NodeFilesystemAlmostOutOfSpace
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available space left.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemalmostoutofspace
+          summary: Filesystem has less than 5% space left.
+        expr: |-
+          (
+            node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 5
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: warning
+      - alert: NodeFilesystemAlmostOutOfSpace
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available space left.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemalmostoutofspace
+          summary: Filesystem has less than 3% space left.
+        expr: |-
+          (
+            node_filesystem_avail_bytes{job="node-exporter",fstype!=""} / node_filesystem_size_bytes{job="node-exporter",fstype!=""} * 100 < 3
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: critical
+      - alert: NodeFilesystemFilesFillingUp
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available inodes left and is filling up.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemfilesfillingup
+          summary: Filesystem is predicted to run out of inodes within the next 24 hours.
+        expr: |-
+          (
+            node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 40
+          and
+            predict_linear(node_filesystem_files_free{job="node-exporter",fstype!=""}[6h], 24*60*60) < 0
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: warning
+      - alert: NodeFilesystemFilesFillingUp
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available inodes left and is filling up fast.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemfilesfillingup
+          summary: Filesystem is predicted to run out of inodes within the next 4 hours.
+        expr: |-
+          (
+            node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 20
+          and
+            predict_linear(node_filesystem_files_free{job="node-exporter",fstype!=""}[6h], 4*60*60) < 0
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: critical
+      - alert: NodeFilesystemAlmostOutOfFiles
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available inodes left.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemalmostoutoffiles
+          summary: Filesystem has less than 5% inodes left.
+        expr: |-
+          (
+            node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 5
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: warning
+      - alert: NodeFilesystemAlmostOutOfFiles
+        annotations:
+          description: Filesystem on {{ $labels.device }} at {{ $labels.instance }} has
+            only {{ printf "%.2f" $value }}% available inodes left.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodefilesystemalmostoutoffiles
+          summary: Filesystem has less than 3% inodes left.
+        expr: |-
+          (
+            node_filesystem_files_free{job="node-exporter",fstype!=""} / node_filesystem_files{job="node-exporter",fstype!=""} * 100 < 3
+          and
+            node_filesystem_readonly{job="node-exporter",fstype!=""} == 0
+          )
+        for: 1h
+        labels:
+          severity: critical
+      - alert: NodeNetworkReceiveErrs
+        annotations:
+          description: '{{ $labels.instance }} interface {{ $labels.device }} has encountered
+            {{ printf "%.0f" $value }} receive errors in the last two minutes.'
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodenetworkreceiveerrs
+          summary: Network interface is reporting many receive errors.
+        expr: increase(node_network_receive_errs_total[2m]) > 10
+        for: 1h
+        labels:
+          severity: warning
+      - alert: NodeNetworkTransmitErrs
+        annotations:
+          description: '{{ $labels.instance }} interface {{ $labels.device }} has encountered
+            {{ printf "%.0f" $value }} transmit errors in the last two minutes.'
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodenetworktransmiterrs
+          summary: Network interface is reporting many transmit errors.
+        expr: increase(node_network_transmit_errs_total[2m]) > 10
+        for: 1h
+        labels:
+          severity: warning
+      - alert: NodeHighNumberConntrackEntriesUsed
+        annotations:
+          description: '{{ $value | humanizePercentage }} of conntrack entries are used.'
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodehighnumberconntrackentriesused
+          summary: Number of conntrack are getting close to the limit.
+        expr: (node_nf_conntrack_entries / node_nf_conntrack_entries_limit) > 0.75
+        labels:
+          severity: warning
+      - alert: NodeTextFileCollectorScrapeError
+        annotations:
+          description: Node Exporter text file collector failed to scrape.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodetextfilecollectorscrapeerror
+          summary: Node Exporter text file collector failed to scrape.
+        expr: node_textfile_scrape_error{job="node-exporter"} == 1
+        labels:
+          severity: warning
+      - alert: NodeClockSkewDetected
+        annotations:
+          message: Clock on {{ $labels.instance }} is out of sync by more than 300s. Ensure
+            NTP is configured correctly on this host.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodeclockskewdetected
+          summary: Clock skew detected.
+        expr: |-
+          (
+            node_timex_offset_seconds > 0.05
+          and
+            deriv(node_timex_offset_seconds[5m]) >= 0
+          )
+          or
+          (
+            node_timex_offset_seconds < -0.05
+          and
+            deriv(node_timex_offset_seconds[5m]) <= 0
+          )
+        for: 10m
+        labels:
+          severity: warning
+      - alert: NodeClockNotSynchronising
+        annotations:
+          message: Clock on {{ $labels.instance }} is not synchronising. Ensure NTP is
+            configured on this host.
+          runbook_url: https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-nodeclocknotsynchronising
+          summary: Clock not synchronising.
+        expr: min_over_time(node_timex_sync_status[5m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+  monitor-prometheus-operator-node-network.yaml: |
+    groups:
+    - name: node-network
+      rules:
+      - alert: NodeNetworkInterfaceFlapping
+        annotations:
+          message: Network interface "{{ $labels.device }}" changing it's up status often
+            on node-exporter {{ $labels.namespace }}/{{ $labels.pod }}"
+        expr: changes(node_network_up{job="node-exporter",device!~"veth.+"}[2m]) > 2
+        for: 2m
+        labels:
+          severity: warning
+  monitor-prometheus-operator-node.rules.yaml: |
+    groups:
+    - name: node.rules
+      rules:
+      - expr: sum(min(kube_pod_info{node!=""}) by (cluster, node))
+        record: ':kube_pod_info_node_count:'
+      - expr: |-
+          topk by(namespace, pod) (1,
+            max by (node, namespace, pod) (
+              label_replace(kube_pod_info{job="kube-state-metrics",node!=""}, "pod", "$1", "pod", "(.*)")
+          ))
+        record: 'node_namespace_pod:kube_pod_info:'
+      - expr: |-
+          count by (cluster, node) (sum by (node, cpu) (
+            node_cpu_seconds_total{job="node-exporter"}
+          * on (namespace, pod) group_left(node)
+            node_namespace_pod:kube_pod_info:
+          ))
+        record: node:node_num_cpu:sum
+      - expr: |-
+          sum(
+            node_memory_MemAvailable_bytes{job="node-exporter"} or
+            (
+              node_memory_Buffers_bytes{job="node-exporter"} +
+              node_memory_Cached_bytes{job="node-exporter"} +
+              node_memory_MemFree_bytes{job="node-exporter"} +
+              node_memory_Slab_bytes{job="node-exporter"}
+            )
+          ) by (cluster)
+        record: :node_memory_MemAvailable_bytes:sum
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2023-06-08T05:37:00Z"
+  labels:
+    managed-by: prometheus-operator
+    prometheus-name: prometheus-operator-prometheus
+  managedFields:
+  - apiVersion: v1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:data:
+        .: {}
+        f:monitor-prometheus-operator-alertmanager.rules.yaml: {}
+        f:monitor-prometheus-operator-etcd.yaml: {}
+        f:monitor-prometheus-operator-general.rules.yaml: {}
+        f:monitor-prometheus-operator-k8s.rules.yaml: {}
+        f:monitor-prometheus-operator-kube-apiserver-availability.rules.yaml: {}
+        f:monitor-prometheus-operator-kube-apiserver-slos.yaml: {}
+        f:monitor-prometheus-operator-kube-apiserver.rules.yaml: {}
+        f:monitor-prometheus-operator-kube-prometheus-general.rules.yaml: {}
+        f:monitor-prometheus-operator-kube-prometheus-node-recording.rules.yaml: {}
+        f:monitor-prometheus-operator-kube-scheduler.rules.yaml: {}
+        f:monitor-prometheus-operator-kube-state-metrics.yaml: {}
+        f:monitor-prometheus-operator-kubelet.rules.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-apps.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-resources.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-storage.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-system-apiserver.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-system-controller-manager.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-system-kubelet.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-system-scheduler.yaml: {}
+        f:monitor-prometheus-operator-kubernetes-system.yaml: {}
+        f:monitor-prometheus-operator-node-exporter.rules.yaml: {}
+        f:monitor-prometheus-operator-node-exporter.yaml: {}
+        f:monitor-prometheus-operator-node-network.yaml: {}
+        f:monitor-prometheus-operator-node.rules.yaml: {}
+        f:monitor-prometheus-operator-prometheus-operator.yaml: {}
+        f:monitor-prometheus-operator-prometheus.yaml: {}
+      f:metadata:
+        f:labels:
+          .: {}
+          f:managed-by: {}
+          f:prometheus-name: {}
+        f:ownerReferences:
+          .: {}
+          k:{"uid":"ce63d7a3-119b-4b75-a595-668dff322b86"}:
+            .: {}
+            f:apiVersion: {}
+            f:blockOwnerDeletion: {}
+            f:controller: {}
+            f:kind: {}
+            f:name: {}
+            f:uid: {}
+    manager: operator
+    operation: Update
+    time: "2023-06-08T05:37:00Z"
+  name: prometheus-prometheus-operator-prometheus-rulefiles-0
+  namespace: thanos
+  ownerReferences:
+  - apiVersion: monitoring.coreos.com/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Prometheus
+    name: prometheus-operator-prometheus
+    uid: ce63d7a3-119b-4b75-a595-668dff322b86
+  resourceVersion: "19337291"
+  selfLink: /api/v1/namespaces/monitor/configmaps/prometheus-prometheus-operator-prometheus-rulefiles-0
+  uid: 8d005ffc-af0e-4d0d-97f5-9211c6870da3

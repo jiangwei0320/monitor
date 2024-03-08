@@ -1,0 +1,1 @@
+kubectl create secret generic thanos-objectstorage --from-file=objectstorage.yaml=thanos-storage-minio.yaml -n monitor

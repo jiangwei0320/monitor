@@ -1,5 +1,7 @@
 Consul 是一个多网络工具，提供功能齐全的服务网格解决方案。它解决了在多云和混合云环境中运行微服务和云基础设施的网络和安全挑战。本文档介绍了 Consul 的概念、它解决的问题，并包含使用 Consul 的快速入门教程。
 
+https://yunlzheng.gitbook.io/prometheus-book/part-ii-prometheus-jin-jie/sd/service-discovery-with-consul
+
 1、服务安装
 
 ```
@@ -21,7 +23,12 @@ curl --request PUT http://10.0.100.203:8500/v1/agent/service/deregister/10.0.102
 注：10.0.102.10 为上述put传参中唯一的id,建议使用mac地址
 ```
 
+5、在 prometheus 中配置自动发现consul，在prometheus页面的configration中配置（根据实际部署情况，正常为promethues.yaml文件）
 
-
-
+```
+- job_name: consul-prometheus
+  consul_sd_configs:
+  - server: 10.0.100.203:8500
+    refresh_interval: 30s
+```
 

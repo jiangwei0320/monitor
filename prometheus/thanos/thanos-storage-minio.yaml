@@ -1,0 +1,9 @@
+# thanos-storage-minio.yaml
+type: s3
+config:
+  bucket: thanos # bucket 名称
+  endpoint: minio.leinaoyun-system.svc.cluster.local:9000 # minio 访问地址
+  access_key: LEINAOYUNOS
+  secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYLEINAOYUNKEY
+  insecure: true
+  signature_version2: false
