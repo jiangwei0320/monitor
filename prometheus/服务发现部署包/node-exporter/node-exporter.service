@@ -1,0 +1,21 @@
+[Unit]
+Description=Prometheus node_exporter
+Requires=network.target remote-fs.target
+After=network.target remote-fs.target
+
+
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/node_exporter --web.listen-address=0.0.0.0:9110
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+
+
+
+[Install]
+WantedBy=multi-user.target

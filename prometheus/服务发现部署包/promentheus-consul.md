@@ -11,14 +11,14 @@ helm install consul consul/ -n consul
 3、注册一个服务到consul
 
 ```
-curl -X PUT -d '{"id": "10.0.102.10","name": "10.0.102.10","address": "10.0.102.10","port": 9110,"tags": ["10.0.102.10"],"meta": {"job": "10.0.102.10","instance": "10.0.102.10"},"checks": [{"http": "http://10.0.102.10:9100/metrics", "interval": "5s"}]}' http://localhost:8500/v1/agent/service/register
+curl -X PUT -d '{"id": "10.0.102.10","name": "10.0.102.10","address": "10.0.102.10","port": 9110,"tags": ["10.0.102.10"],"meta": {"job": "10.0.102.10","instance": "10.0.102.10"},"checks": [{"http": "http://10.0.102.10:9110/metrics", "interval": "5s"}]}' http://localhost:8500/v1/agent/service/register
 ```
 
 4、删除一个consul中的node节点
 
 ```
 curl --request PUT http://10.0.100.203:8500/v1/agent/service/deregister/10.0.102.10
-注：10.0.102.10 为上述put传参中唯一的id
+注：10.0.102.10 为上述put传参中唯一的id,建议使用mac地址
 ```
 
 
