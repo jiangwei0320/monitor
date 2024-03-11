@@ -1,3 +1,5 @@
+
+
 问题：我们无法修改原生的operator部署的prometheus 的secret（prometheus.yaml.gz），也就是页面中的 **configration** 配置
 
 参考连接：https://yunlzheng.gitbook.io/prometheus-book/part-iii-prometheus-shi-zhan/operator/use-custom-configuration-in-operator
