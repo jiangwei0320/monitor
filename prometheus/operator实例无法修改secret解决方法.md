@@ -4,14 +4,9 @@
 
 1.修改promethes-operator部署得环境prometheus的configration
 
+**下述方法 仅支持configration.scrape_configs: 的更改，也就是追加不同的 job-name**
+
 （1）新建一个prometheus-additional.yaml文件，文件内容如下，填写你本次要**附加**得一些配置，原configration中存在的，这里不需要加了
-
-```
-remote_write:
-- url: http://10.0.100.203:19291/api/v1/receive
-```
-
-或者这种
 
 ```
 - job_name: kubernetes-pods
@@ -47,6 +42,8 @@ spec:
 
 
 在 operator中可以，如果修改prometheus 的secret（prometheus.yaml.gz），也就是页面中的 **configration** 配置，需要在operator部署**yaml所在目录下**，按照 “**Prometheus Operator 高级配置.pdf**”文档步骤一步一步配置
+
+还可以参考：https://developer.aliyun.com/article/1118992
 
 
 
