@@ -33,7 +33,8 @@ https://prometheus.io/docs/practices/remote_write/
 ```
 
 ```
-
+remote_write:
+- url: http://10.0.100.203:19291/api/v1/receive
 ```
 
 

@@ -1,4 +1,8 @@
+方法一：
 
+在 operator中可以，如果修改prometheus 的secret（prometheus.yaml.gz），也就是页面中的 **configration** 配置，需要在operator部署**yaml所在目录下**，按照 “**Prometheus Operator 高级配置.pdf**”文档步骤一步一步配置
+
+方法二：（通过新建promtheus实例，并不是直接 修改configration，而是新建一个promethues）
 
 问题：我们无法修改原生的operator部署的prometheus 的secret（prometheus.yaml.gz），也就是页面中的 **configration** 配置
 
