@@ -1,10 +1,8 @@
 
 
-方法一：
+### promethes-operator环境下prometheus的configration如何修改
 
-1.修改promethes-operator部署得环境prometheus的configration
-
-**下述方法 仅支持configration.scrape_configs的更改，也就是追加不同的 job-name**
+**configration.scrape_configs的更改，也就是追加不同的 job-name**
 
 （1）新建一个prometheus-additional.yaml文件，文件内容如下，填写你本次要**附加**得一些配置，原configration中存在的，这里不需要加了
 
@@ -39,11 +37,34 @@ spec:
    <value>为上述生成的secretname
 ```
 
-
-
-在 operator中可以，如果修改prometheus 的secret（prometheus.yaml.gz），也就是页面中的 **configration** 配置，需要在operator部署**yaml所在目录下**，按照 “**Prometheus Operator 高级配置.pdf**”文档步骤一步一步配置
-
 还可以参考：https://developer.aliyun.com/article/1118992
+
+**configration.remote-wraite**
+
+2.通过修改crd，插入下述配置
+
+```
+# 查看当前集群上述crd资源的name
+kubectl get prometheuses.monitoring.coreos.com -n monitoring
+```
+
+```
+# 编辑crd，加上如下配置
+spec：
+  remoteWrite:
+  - url: http://10.0.100.203:19291/api/v1/receive
+```
+
+**configration.global.external_labels**
+
+3.同上
+
+```
+# 编辑crd，加上如下配置，为集群打上标签
+spec：
+  externalLabels:
+    origin_prometheus: leinaoyun-dev-cluster
+```
 
 
 
