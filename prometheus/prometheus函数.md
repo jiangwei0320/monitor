@@ -43,7 +43,12 @@ increase(node_network_receive_bytes_total[1m])  # 1分钟内的增量总量，�
 
 比如企业中有100台服务器，当有10台服务器CPU高于80%时候，不需要报警，但是当有30台超过80%的时候，这个时候需要触发告警
 
+##### 6、`avg` 函数会计算这段时间内所有数据点的平均值，并返回一个单值时间序列。
 
+```
+avg(http_requests_total{job="example"})
+这将返回 job 标签为 "example" 的所有 http_requests_total 时间序列数据在查询的时间范围内的平均值。
+```
 
 
 
