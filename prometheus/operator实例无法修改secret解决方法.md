@@ -15,7 +15,7 @@
 （2）promethes-operator所在得namespace空间下新建一个secret 
 
 ```
-$ kubectl create secret generic additional-config --from-file=prometheus-additional.yaml -n monitoring
+$ kubectl create secret generic additional-configs --from-file=prometheus-additional.yaml -n monitoring
 注：<additional-config>为secretname 自定义
 ```
 
