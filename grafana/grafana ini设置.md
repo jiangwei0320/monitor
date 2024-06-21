@@ -6,11 +6,30 @@
 kubectl set env deployment/monitor-grafana GF_AUTH_ANONYMOUS_ENABLED=false -n monitoring
 ```
 
+配置文件配置(很多默认配置并未写进ini文件。需要修改默认值，添加进来即可)：
+
+```
+[date_formats]
+default_timezone = CST
+[server]
+domain = localhost
+root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana
+serve_from_sub_path = true
+[auth.anonymous]
+enabled = true
+```
+
 
 
 ##### 
 
+##### 2、允许页面嵌入
 
+```
+[security]
+allow_embedding	= true # 默认值是false。不允许页面嵌入
+kiosk  # 去除边框
+```
 
 ##### 3、通过ingress配置prometheus、alertmanager账号密码认证
 
