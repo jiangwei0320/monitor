@@ -1,0 +1,298 @@
+kubectl get prometheuses.monitoring.coreos.com -n monitoring monitor-kube-prometheus-st-prometheus -o yaml
+
+spec:
+  alerting:
+    alertmanagers:
+    - name: alertmanager-operated
+      namespace: monitoring
+      pathPrefix: /alertmanager
+      port: 9093
+      scheme: http
+  enableAdminAPI: false
+  enableFeatures:
+  - remote-write-receiver
+  externalUrl: http://localhost:39090/prometheus
+  image: registry.hub.com:5000/monitor/prometheus:v2.27.1
+  listenLocal: false
+  logFormat: logfmt
+  logLevel: info
+  nodeSelector:
+    node-role.kubernetes.io/leinaoyun: "true"
+  paused: false
+  podMonitorNamespaceSelector: {}
+  podMonitorSelector:
+    matchLabels:
+      release: monitor
+  portName: web
+  probeNamespaceSelector: {}
+  probeSelector:
+    matchLabels:
+      release: monitor
+  replicas: 1
+  retention: 2d
+  routePrefix: /
+  ruleNamespaceSelector: {}
+  ruleSelector:
+    matchLabels:
+      app: kube-prometheus-stack
+      release: monitor
+  secrets:
+  - etcd-client-cert
+  securityContext:
+    fsGroup: 2000
+    runAsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 1000
+  serviceAccountName: monitor-kube-prometheus-st-prometheus
+  serviceMonitorNamespaceSelector: {}
+  serviceMonitorSelector:
+    matchLabels:
+      release: monitor
+  shards: 1
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+        storageClassName: leinaoyun
+  thanos:
+    image: thanosio/thanos:v0.18.0
+    objectStorageConfig:
+      key: thanos.yaml
+      name: thanos-objectstorage
+    resources:
+      limits:
+        cpu: 500m
+        memory: 500Mi
+      requests:
+        cpu: 100m
+        memory: 500Mi
+  version: v2.27.1
+
+
+
+
+说明：
+
+1、remote-write-receiver 开启远程写，配合grafana-agent使用，场景：端边
+
+2、thanos配置，开启thanos边车，对应每个prometheus实例。
+
+
+
+
+一、配置minio
+
+[root@SLRH-102-10 thanos]# cat thanos-storage-minio.yaml 
+type: s3
+config:
+  bucket: thanos # bucket 名称
+  endpoint: minio.leinaoyun-system.svc.cluster.local:9000 # minio 访问地址
+  access_key: LEINAOYUNOS
+  secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYLEINAOYUNKEY
+  insecure: true
+  signature_version2: false
+
+挂载k8s secret
+
+kubectl create secret generic thanos-objectstorage --from-file=thanos.yaml=thanos-storage-minio.yaml -n monitoring
+
+
+
+
+二、querier部署，指标查询
+
+[root@SLRH-102-10 thanos]# cat thanos-query.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-querier
+  namespace: monitoring
+  labels:
+    app: thanos-querier
+spec:
+  selector:
+    matchLabels:
+      app: thanos-querier
+  template:
+    metadata:
+      labels:
+        app: thanos-querier
+    spec:
+      containers:
+        - name: thanos
+          image: thanosio/thanos:v0.18.0
+          args:
+            - query
+            - --log.level=debug
+            - --query.replica-label=prometheus_replica
+            - --store=dnssrv+prometheus-operated:10901
+            - --store=dnssrv+thanos-store:10901
+          ports:
+            - name: http
+              containerPort: 10902
+            - name: grpc
+              containerPort: 10901
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-querier
+  namespace: monitoring
+  labels:
+    app: thanos-querier
+spec:
+  ports:
+    - port: 9090
+      targetPort: http
+      name: http
+  selector:
+    app: thanos-querier
+
+
+
+
+三、远端存储 store 2小时同步一次块
+
+[root@SLRH-102-10 thanos]# cat thanos-store.yaml 
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-store
+  namespace: monitoring
+  labels:
+    app: thanos-store
+spec:
+  selector:
+    matchLabels:
+      app: thanos-store
+  serviceName: thanos-store
+  template:
+    metadata:
+      labels:
+        app: thanos-store
+    spec:
+      containers:
+        - name: thanos
+          image: thanosio/thanos:v0.18.0
+          args:
+            - "store"
+            - "--log.level=debug"
+            - "--data-dir=/data"
+            - "--objstore.config-file=/etc/secret/thanos.yaml"
+            - "--index-cache-size=500MB"
+            - "--chunk-pool-size=500MB"
+          ports:
+            - name: http
+              containerPort: 10902
+            - name: grpc
+              containerPort: 10901
+          livenessProbe:
+            httpGet:
+              port: 10902
+              path: /-/healthy
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet:
+              port: 10902
+              path: /-/ready
+            initialDelaySeconds: 15
+          volumeMounts:
+            - name: object-storage-config
+              mountPath: /etc/secret
+              readOnly: false
+      volumes:
+        - name: object-storage-config
+          secret:
+            secretName: thanos-objectstorage
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-store
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: grpc
+      port: 10901
+      targetPort: grpc
+  selector:
+    app: thanos-store
+
+
+
+
+四、compactor 可选部署/块压缩
+
+[root@SLRH-102-10 thanos]# cat thanos-compactor.yaml 
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-compactor
+  namespace: monitoring
+  labels:
+    app: thanos-compactor
+spec:
+  selector:
+    matchLabels:
+      app: thanos-compactor
+  serviceName: thanos-compactor
+  template:
+    metadata:
+      labels:
+        app: thanos-compactor
+    spec:
+      containers:
+        - name: thanos
+          image: thanosio/thanos:v0.18.0
+          args:
+            - "compact"
+            - "--log.level=debug"
+            - "--data-dir=/data"
+            - "--objstore.config-file=/etc/secret/thanos.yaml"
+            - "--wait"
+          ports:
+            - name: http
+              containerPort: 10902
+          livenessProbe:
+            httpGet:
+              port: 10902
+              path: /-/healthy
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet:
+              port: 10902
+              path: /-/ready
+            initialDelaySeconds: 15
+          volumeMounts:
+            - name: object-storage-config
+              mountPath: /etc/secret
+              readOnly: false
+      volumes:
+        - name: object-storage-config
+          secret:
+            secretName: thanos-objectstorage
+
+
