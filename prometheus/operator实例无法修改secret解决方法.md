@@ -39,6 +39,8 @@ spec:
 
 还可以参考：https://developer.aliyun.com/article/1118992
 
+**注：如果发现没生效，八成是新增得prometheus-additional.yaml这里面yaml文件格式有问题，虽然有问题，但是prometheus并不会报错；**
+
 **configration.remote-wraite**
 
 2.通过修改crd，插入下述配置
