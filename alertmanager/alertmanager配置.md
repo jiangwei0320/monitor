@@ -72,13 +72,17 @@ data:
 "route":
   "group_by":
   - "namespace"
-  "group_interval": "5m"
+  "group_interval": "1h"
   "group_wait": "30s"
-  "receiver": "email"        #默认没有触发下述route的告警规则，都由这条规则接收；
+  "receiver": "email"                      # 默认匹配不到下述得路由都从这个告警走
   "repeat_interval": "12h"
   "routes":
-  - "receiver": "wechat"     #如果这里不写match，选择具体路由，那么所有的告警都会从这里也发一份
-  - "receiver": "email"
+  - match:
+      severity: critical                   # 这里严重告警路由到微信，从微信发
+    receiver: 'wechat'
+  - match:
+      severity: warning                    # 这里警告告警路由到邮件，从邮件发
+    receiver: 'email'
 "templates":
 - "/etc/alertmanager/config/*.tmpl"
 ```
