@@ -51,10 +51,19 @@ kubectl get prometheuses.monitoring.coreos.com -n monitoring
 ```
 
 ```
-# 编辑crd，加上如下配置
+# 编辑crd，加上如下配置(所有数据都写到远程的203集群中)
+spec：
+  remoteWrite:
+  - url: http://10.0.100.203:19291/api/v1/receive  
+# 编辑crd，加上如下配置(格局下述lable，筛选数据，具体是否传输到远程集群，需要根据action：有多个配置，可以选择删除，保持、丢弃等) 
 spec：
   remoteWrite:
   - url: http://10.0.100.203:19291/api/v1/receive
+  	writeRelabelConfigs:
+    - action: keep
+      regex: ^(false|true)
+      sourceLabels:
+      - sidecar_istio_io_inject
 ```
 
 **configration.global.external_labels**
