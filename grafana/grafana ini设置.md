@@ -57,5 +57,17 @@ kiosk  # 去除边框
     nginx.ingress.kubernetes.io/auth-type: basic
 ```
 
+##### 4、更换grafana访问url
+
+```
+# 将ini配置文件root_url更换成需要的
+更换前：
+root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana
+更换后：
+root_url = %(protocol)s://%(domain)s:%(http_port)s/apis/grafana.hero.ai/v1/grafana
+注：
+更换完成后，再将ingress更改成对应的访问路径即可
+```
+
 
 
