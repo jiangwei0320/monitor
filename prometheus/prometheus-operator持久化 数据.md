@@ -15,7 +15,7 @@
 
 #### 2、因为直接修改statefulset是不生效的，通过修改crd资源 更改容器配置，添加storage字段 ；
 
-```
+```yaml
 # kubectl get prometheuses.monitoring.coreos.com -n monitoring 
 # kubectl edit prometheuses.monitoring.coreos.com -n monitoring k8s
 spec:
@@ -27,14 +27,14 @@ spec:
         resources:
           requests:
             storage: 20Gi
-        storageClassName: prometheusd
+        storageClassName: prometheusdb
         
 # 可以在http://IP/prometheus/status中查看保留时间是否生效
 ```
 
 #### 3、定义了 一个storageClass
 
-```
+```shell
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
@@ -51,7 +51,7 @@ volumeBindingMode: WaitForFirstConsumer
 
 
 
-```
+```yaml
 apiVersion: v1
 kind: PersistentVolume
 metadata:
