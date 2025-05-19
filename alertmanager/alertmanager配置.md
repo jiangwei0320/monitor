@@ -1,6 +1,6 @@
 ##### 1、如何让当前得alertmanager接入promeheus的告警
 
-```
+```yaml
 # kubectl edit prometheuses.monitoring.coreos.com -n monitoring k8s 
 spec:
   additionalScrapeConfigs:
@@ -20,7 +20,7 @@ spec:
 
 一般secret中可以写如下配置:
 
-```
+```yaml
 apiVersion: v1
 data:
   alertmanager.yaml: Imdsb2JhbCI6CiAgInJlc29sdmVfdGltZW91dCI6ICI1bSIKICAic210cF9mcm9tIjogImxlaW5hb19tb25pdG9yQDE2My5jb20iCiAgInNtdHBfc21hcnRob3N0IjogInNtdHAuMTYzLmNvbTo0NjUiCiAgInNtdHBfYX=
@@ -30,7 +30,7 @@ data:
 
 对应解码后，相当于下述配置，alertmanager.yaml
 
-```
+```yaml
 "global":
   "resolve_timeout": "5m"
   "smtp_from": "leinao_monitor@163.com"
@@ -91,7 +91,7 @@ data:
 
 <br> 主要是用于页面换行，如果显示在一行，使用<br>
 
-```
+```yaml
 {{ define "email.default.message" }}
 {{- if gt (len .Alerts.Firing) 0 -}}
 {{- range $index, $alert := .Alerts -}}
@@ -133,36 +133,48 @@ data:
 
 ###### （2）微信模板（ .tmpl: ）
 
-```
+```yaml
 {{ define "wechat_business.start.html" }}
   {{ range $i, $alert := .Alerts }}
-============Start============ <br>
-    [告警状态]：{{ .Status }} <br>
-    [告警项]: {{ index $alert.Labels "alert_name" }} <br>
-    [集群]：{{ index $alert.Labels "cluster" }} <br>
-    [接口]：{{ index $alert.Labels "interface" }} <br>
-    [摘要信息]：{{ index $alert.Annotations "value" }} <br>
-    [开始时间]：{{ .StartsAt.Format "2006-01-02 15:04:05" }} <br>
-============End============= <br>
+============Start============
+    [告警状态]：{{ .Status }}
+    [告警项]: {{ index $alert.Labels "alertname" }}
+    [故障集群]：{{ index $alert.Labels "origin_prometheus" }}
+    [故障主机]：{{ index $alert.Labels "Hostname" }}
+    [摘要信息]：{{ index $alert.Annotations "description" }}
+    [开始时间]：{{ (.EndsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+============End=============
   {{ end }}
 {{ end }}
+
 {{ define "wechat_business.restore.html" }}
   {{ range $i, $alert := .Alerts }}
-============Start============ <br>
+============Start============
     [告警状态]：{{ .Status }}
-    [告警项]: {{ index $alert.Labels "alert_name" }} <br>
-    [集群]：{{ index $alert.Labels "cluster" }} <br>
-    [接口]：{{ index $alert.Labels "interface" }} <br>
-    [摘要信息]：{{ index $alert.Annotations "value" }} <br>
-    [恢复时间]：{{ .EndsAt.Format "2006-01-02 15:04:05" }} <br>
-============End============= <br>
+    [告警项]: {{ index $alert.Labels "alertname" }}
+    [故障集群]：{{ index $alert.Labels "origin_prometheus" }}
+    [故障主机]：{{ index $alert.Labels "Hostname" }}
+    [摘要信息]：{{ index $alert.Annotations "description" }}
+    [恢复时间]：{{ (.EndsAt.Add 28800e9).Format "2006-01-02 15:04:05" }}
+============End=============
   {{ end }}
 {{ end }}
+
 {{ define "wechat_business.html" }}
   {{ if eq .Status "firing"}}{{ template "wechat_business.start.html" . }}
   {{ end }}
   {{ if eq .Status "resolved" }}{{ template "wechat_business.restore.html" . }}
   {{ end }}
 {{ end }}
+```
+
+##### 3、设置日志级别,编辑alertmanger的控制器，statefulset
+
+```shell
+- args:
+        - --config.file=/etc/alertmanager/config/alertmanager.yaml
+        - --storage.path=/alertmanager
+        ......
+        - --log.level=debug
 ```
 
