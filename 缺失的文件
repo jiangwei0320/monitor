@@ -1,0 +1,4 @@
+1、镜像：docker.mirror.hashicorp.services/hashicorppreview/consul-k8s-control-plane:1.5-dev
+2、thancos 部署文件
+3、告警规则、配置文件
+4、consul部署包
