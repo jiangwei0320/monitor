@@ -19,6 +19,12 @@ curl -X PUT -d '{"id": "10.0.102.10","name": "10.0.102.10","address": "10.0.102.
 4、删除一个consul中的node节点
 
 ```
+# 1. 先查看 Consul 中注册的所有服务，找到 10.244.207.163 对应的服务ID
+curl http://10.56.11.232:8500/v1/agent/services
+
+# 2. 根据查到的服务ID，注销这个错误的服务（替换成实际的服务ID）
+curl -X PUT http://10.56.11.232:8500/v1/agent/service/deregister/[服务ID]
+或者
 curl --request PUT http://10.0.100.203:8500/v1/agent/service/deregister/10.0.102.10
 注：10.0.102.10 为上述put传参中唯一的id,建议使用mac地址
 ```
